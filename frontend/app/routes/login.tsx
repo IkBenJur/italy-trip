@@ -23,7 +23,8 @@ export default function Login() {
 
   return (
     <main className="mx-auto max-w-sm px-6 py-12">
-      <h1 className="text-2xl font-bold">Log in</h1>
+      <h1 className="text-2xl font-bold">Italy Trip</h1>
+      <p className="mt-1 text-sm text-gray-500">One shared login.</p>
       <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4">
         <input
           type="email"
