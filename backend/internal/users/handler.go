@@ -22,11 +22,6 @@ func NewHandler(queries repo.Querier, issuer *auth.TokenIssuer) *Handler {
 	return &Handler{Queries: queries, Issuer: issuer}
 }
 
-type registerRequest struct {
-	Email    string `json:"email" binding:"required,email"`
-	Password string `json:"password" binding:"required,min=8"`
-}
-
 type loginRequest struct {
 	Email    string `json:"email" binding:"required,email"`
 	Password string `json:"password" binding:"required"`
@@ -47,37 +42,6 @@ func toUserResponse(user repo.User) userResponse {
 		ID:    utils.UUIDString(user.ID),
 		Email: user.Email,
 	}
-}
-
-func (h *Handler) Register(c *gin.Context) {
-	var req registerRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		json.WriteError(c, http.StatusBadRequest, err)
-		return
-	}
-
-	hash, err := auth.HashPassword(req.Password)
-	if err != nil {
-		json.WriteErrorFromStringWithErrorObjectLog(c, http.StatusInternalServerError, "failed to create user", err)
-		return
-	}
-
-	user, err := h.Queries.CreateUser(c, repo.CreateUserParams{
-		Email:        req.Email,
-		PasswordHash: hash,
-	})
-	if err != nil {
-		json.WriteErrorFromStringWithErrorObjectLog(c, http.StatusConflict, "email already in use", err)
-		return
-	}
-
-	token, err := h.Issuer.Issue(utils.UUIDString(user.ID))
-	if err != nil {
-		json.WriteErrorFromStringWithErrorObjectLog(c, http.StatusInternalServerError, "failed to issue token", err)
-		return
-	}
-
-	json.WriteJSON(c, http.StatusCreated, authResponse{Token: token, User: toUserResponse(user)})
 }
 
 func (h *Handler) Login(c *gin.Context) {

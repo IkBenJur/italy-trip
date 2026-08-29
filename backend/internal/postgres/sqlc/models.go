@@ -8,6 +8,30 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type Event struct {
+	ID        pgtype.UUID        `json:"id"`
+	Name      string             `json:"name"`
+	StartsAt  pgtype.Timestamptz `json:"starts_at"`
+	EndsAt    pgtype.Timestamptz `json:"ends_at"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
+type Photo struct {
+	ID          pgtype.UUID        `json:"id"`
+	EventID     pgtype.UUID        `json:"event_id"`
+	UploadedBy  pgtype.UUID        `json:"uploaded_by"`
+	ClientID    string             `json:"client_id"`
+	StorageKey  string             `json:"storage_key"`
+	ThumbKey    string             `json:"thumb_key"`
+	ContentType string             `json:"content_type"`
+	Width       int32              `json:"width"`
+	Height      int32              `json:"height"`
+	SizeBytes   int64              `json:"size_bytes"`
+	TakenAt     pgtype.Timestamptz `json:"taken_at"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+}
+
 type User struct {
 	ID           pgtype.UUID      `json:"id"`
 	Email        string           `json:"email"`

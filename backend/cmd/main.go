@@ -11,8 +11,12 @@ import (
 
 	"github.com/IkBenJur/italy-trip/internal/auth"
 	"github.com/IkBenJur/italy-trip/internal/env"
+	"github.com/IkBenJur/italy-trip/internal/events"
+	"github.com/IkBenJur/italy-trip/internal/middleware"
+	"github.com/IkBenJur/italy-trip/internal/photos"
 	"github.com/IkBenJur/italy-trip/internal/postgres"
 	repo "github.com/IkBenJur/italy-trip/internal/postgres/sqlc"
+	"github.com/IkBenJur/italy-trip/internal/storage"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 )
@@ -25,6 +29,17 @@ func run(ctx context.Context) error {
 
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
+
+	// MustGet aborts rather than falling back to a committed default: a token
+	// signed with a secret anyone can read from this repo is a forgeable session.
+	jwtSecret := env.MustGet("JWT_SECRET")
+	jwtTTL := time.Duration(env.GetEnvInt("JWT_TTL_HOURS", 24)) * time.Hour
+	issuer := auth.NewTokenIssuer(jwtSecret, jwtTTL)
+
+	// Parsed at boot so a malformed unlock date fails loudly here rather than
+	// silently changing when the album opens.
+	eventConfig := events.ConfigFromEnv()
+	seedUser := events.SeedUserFromEnv()
 
 	dsn := env.GetEnv("GOOSE_DBSTRING", "host=localhost user=postgres password=postgres dbname=italy-trip sslmode=disable")
 
@@ -44,16 +59,30 @@ func run(ctx context.Context) error {
 
 	queries := repo.New(conn)
 
-	jwtSecret := env.GetEnv("JWT_SECRET", "dev-secret-change-me")
-	jwtTTL := time.Duration(env.GetEnvInt("JWT_TTL_HOURS", 24)) * time.Hour
-	issuer := auth.NewTokenIssuer(jwtSecret, jwtTTL)
+	if _, err := events.Seed(ctx, queries, eventConfig, seedUser); err != nil {
+		slog.Error("Failed to seed event", "error", err)
+		return err
+	}
+
+	store, err := storage.NewS3FromEnv(
+		ctx,
+		env.MustGet("AWS_S3_BUCKET_NAME"),
+		env.GetEnvBool("AWS_S3_USE_PATH_STYLE", false),
+	)
+	if err != nil {
+		slog.Error("Failed to build storage client", "error", err)
+		return err
+	}
 
 	port := env.GetEnv("PORT", "8080")
 
 	api := Application{
-		Port:    port,
-		Queries: queries,
-		Issuer:  issuer,
+		Port:           port,
+		AllowedOrigins: middleware.ParseOrigins(env.GetEnv("CORS_ORIGIN", "http://localhost:5173")),
+		Queries:        queries,
+		Issuer:         issuer,
+		Storage:        store,
+		MaxUploadBytes: env.GetEnvInt64("MAX_UPLOAD_BYTES", photos.DefaultMaxUploadBytes),
 	}
 
 	slog.Info("Starting server")

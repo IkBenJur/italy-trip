@@ -6,31 +6,28 @@ import (
 	"net/http"
 
 	"github.com/IkBenJur/italy-trip/internal/auth"
+	"github.com/IkBenJur/italy-trip/internal/events"
 	"github.com/IkBenJur/italy-trip/internal/middleware"
+	"github.com/IkBenJur/italy-trip/internal/photos"
 	repo "github.com/IkBenJur/italy-trip/internal/postgres/sqlc"
+	"github.com/IkBenJur/italy-trip/internal/storage"
 	"github.com/IkBenJur/italy-trip/internal/users"
 	"github.com/gin-gonic/gin"
 )
 
 type Application struct {
-	Port    string
-	Queries repo.Querier
-	Issuer  *auth.TokenIssuer
+	Port           string
+	AllowedOrigins []string
+	Queries        repo.Querier
+	Issuer         *auth.TokenIssuer
+	Storage        storage.Storage
+	MaxUploadBytes int64
 }
 
 func (app *Application) Mount() http.Handler {
 	router := gin.Default()
 
-	router.Use(func(c *gin.Context) {
-		c.Header("Access-Control-Allow-Origin", "*")
-		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-		c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization")
-		if c.Request.Method == http.MethodOptions {
-			c.AbortWithStatus(http.StatusNoContent)
-			return
-		}
-		c.Next()
-	})
+	router.Use(middleware.CORS(app.AllowedOrigins))
 
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
@@ -39,11 +36,21 @@ func (app *Application) Mount() http.Handler {
 	})
 
 	userHandler := users.NewHandler(app.Queries, app.Issuer)
-	router.POST("/auth/register", userHandler.Register)
+	eventHandler := events.NewHandler(app.Queries)
+
+	// There is no registration route. With one shared account and an album that
+	// unlocks for any authenticated user, an open sign-up would let a stranger
+	// register today and read the whole album later.
 	router.POST("/auth/login", userHandler.Login)
+
+	photoHandler := photos.NewHandler(app.Queries, app.Storage, app.MaxUploadBytes)
 
 	authorized := router.Group("/", middleware.RequireAuth(app.Issuer, app.Queries))
 	authorized.GET("users/me", userHandler.Me)
+	authorized.GET("events/current", eventHandler.Current)
+	authorized.POST("events/current/photos", photoHandler.Upload)
+	authorized.GET("events/current/photos", photoHandler.List)
+	authorized.GET("photos/:id/original", photoHandler.Original)
 
 	return router
 }
