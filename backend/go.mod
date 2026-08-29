@@ -1,4 +1,4 @@
-module github.com/IkBenJur/__PROJECT_SLUG__
+module github.com/IkBenJur/italy-trip
 
 go 1.26.2
 

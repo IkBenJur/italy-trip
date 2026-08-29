@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/IkBenJur/__PROJECT_SLUG__/internal/auth"
-	"github.com/IkBenJur/__PROJECT_SLUG__/internal/middleware"
-	repo "github.com/IkBenJur/__PROJECT_SLUG__/internal/postgres/sqlc"
-	"github.com/IkBenJur/__PROJECT_SLUG__/internal/users"
+	"github.com/IkBenJur/italy-trip/internal/auth"
+	"github.com/IkBenJur/italy-trip/internal/middleware"
+	repo "github.com/IkBenJur/italy-trip/internal/postgres/sqlc"
+	"github.com/IkBenJur/italy-trip/internal/users"
 	"github.com/gin-gonic/gin"
 )
 

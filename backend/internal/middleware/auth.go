@@ -4,10 +4,10 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/IkBenJur/__PROJECT_SLUG__/internal/auth"
-	"github.com/IkBenJur/__PROJECT_SLUG__/internal/json"
-	repo "github.com/IkBenJur/__PROJECT_SLUG__/internal/postgres/sqlc"
-	"github.com/IkBenJur/__PROJECT_SLUG__/internal/utils"
+	"github.com/IkBenJur/italy-trip/internal/auth"
+	"github.com/IkBenJur/italy-trip/internal/json"
+	repo "github.com/IkBenJur/italy-trip/internal/postgres/sqlc"
+	"github.com/IkBenJur/italy-trip/internal/utils"
 	"github.com/gin-gonic/gin"
 )
 

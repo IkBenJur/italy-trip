@@ -1,4 +1,4 @@
-# __PROJECT_NAME__
+# italy-trip
 
 Base repo for Go + React projects.
 
