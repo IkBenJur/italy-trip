@@ -1,10 +1,10 @@
 package storage
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
-	"net/url"
 	"sort"
 	"sync"
 	"time"
@@ -27,6 +27,8 @@ type Fake struct {
 	PutErr error
 	// PresignErr, when set, makes every presign fail.
 	PresignErr error
+	// OpenErr, when set, makes every Open fail.
+	OpenErr error
 }
 
 func NewFake() *Fake {
@@ -63,12 +65,23 @@ func (f *Fake) PresignGet(ctx context.Context, key string, ttl time.Duration) (s
 	), nil
 }
 
-func (f *Fake) PresignDownload(ctx context.Context, key, filename string, ttl time.Duration) (string, error) {
-	signed, err := f.PresignGet(ctx, key, ttl)
-	if err != nil {
-		return "", err
+func (f *Fake) Open(ctx context.Context, key string) (*Download, error) {
+	if f.OpenErr != nil {
+		return nil, f.OpenErr
 	}
-	return signed + "&response-content-disposition=" + url.QueryEscape(contentDisposition(filename)), nil
+
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	obj, ok := f.objects[key]
+	if !ok {
+		return nil, fmt.Errorf("open %s: no such object", key)
+	}
+
+	return &Download{
+		Body:          io.NopCloser(bytes.NewReader(obj.Body)),
+		ContentType:   obj.ContentType,
+		ContentLength: int64(len(obj.Body)),
+	}, nil
 }
 
 // Get returns a stored object, for assertions.

@@ -67,12 +67,25 @@ func (s *S3Storage) PresignGet(ctx context.Context, key string, ttl time.Duratio
 	}, ttl)
 }
 
-func (s *S3Storage) PresignDownload(ctx context.Context, key, filename string, ttl time.Duration) (string, error) {
-	return s.presignGet(ctx, &s3.GetObjectInput{
-		Bucket:                     aws.String(s.bucket),
-		Key:                        aws.String(key),
-		ResponseContentDisposition: aws.String(contentDisposition(filename)),
-	}, ttl)
+func (s *S3Storage) Open(ctx context.Context, key string) (*Download, error) {
+	out, err := s.client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("open %s: %w", key, err)
+	}
+
+	length := int64(-1)
+	if out.ContentLength != nil {
+		length = *out.ContentLength
+	}
+
+	return &Download{
+		Body:          out.Body,
+		ContentType:   aws.ToString(out.ContentType),
+		ContentLength: length,
+	}, nil
 }
 
 func (s *S3Storage) presignGet(ctx context.Context, in *s3.GetObjectInput, ttl time.Duration) (string, error) {

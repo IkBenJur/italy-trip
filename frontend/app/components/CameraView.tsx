@@ -1,6 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Webcam from "react-webcam";
 import { captureFrame, CaptureError, type CaptureResult } from "~/lib/capture";
+import {
+  DEFAULT_FACING,
+  hasMultipleCameras,
+  readFacing,
+  writeFacing,
+  type Facing,
+} from "~/lib/cameraDevices";
 
 /**
  * `navigator.mediaDevices` is only *defined* on https, localhost or 127.0.0.1.
@@ -36,11 +43,32 @@ export function CameraView({ onConfirm, overlay }: CameraViewProps) {
   const [phase, setPhase] = useState<Phase>({ kind: "checking" });
   const [busy, setBusy] = useState(false);
 
+  // Starts on the rear camera and is corrected from storage on mount: reading
+  // localStorage during render would not match the prerendered HTML.
+  const [facing, setFacing] = useState<Facing>(DEFAULT_FACING);
+
+  // Only true once a live stream has proved there is a second camera.
+  const [canFlip, setCanFlip] = useState(false);
+
+  // Set while a flip is renegotiating the stream. The video is briefly 0x0 in
+  // that window, which the shutter must not be pressed into.
+  const [switching, setSwitching] = useState(false);
+
+  // The camera to fall back to if the one being switched to refuses to start.
+  const facingBeforeSwitch = useRef<Facing>(DEFAULT_FACING);
+
   // Bumping this remounts <Webcam>, which is how a dead stream is recovered.
   const [streamKey, setStreamKey] = useState(0);
 
   useEffect(() => {
-    setPhase(cameraApiAvailable() ? { kind: "live" } : { kind: "unsupported" });
+    if (!cameraApiAvailable()) {
+      setPhase({ kind: "unsupported" });
+      return;
+    }
+    const stored = readFacing();
+    setFacing(stored);
+    facingBeforeSwitch.current = stored;
+    setPhase({ kind: "live" });
   }, []);
 
   // The object URL for the review image is a real allocation. Leaking these on a
@@ -76,17 +104,62 @@ export function CameraView({ onConfirm, overlay }: CameraViewProps) {
     };
   }, []);
 
-  const handleUserMediaError = useCallback((error: string | DOMException) => {
-    const name = typeof error === "string" ? error : error.name;
-    if (name === "NotAllowedError" || name === "PermissionDeniedError" || name === "SecurityError") {
-      setPhase({ kind: "denied" });
-      return;
+  /**
+   * A live stream is the first moment enumerateDevices() can be trusted, so the
+   * "is there a second camera" probe hangs off it rather than off mount.
+   */
+  const handleUserMedia = useCallback(() => {
+    setSwitching(false);
+    if (!canFlip) {
+      void hasMultipleCameras().then(setCanFlip);
     }
-    setPhase({
-      kind: "error",
-      message: typeof error === "string" ? error : `${error.name}: ${error.message}`,
-    });
-  }, []);
+  }, [canFlip]);
+
+  const handleUserMediaError = useCallback(
+    (error: string | DOMException) => {
+      // A camera that refuses to start mid-flip should hand back the one that
+      // was already working, not take over the screen with an error.
+      if (switching) {
+        const previous = facingBeforeSwitch.current;
+        setSwitching(false);
+        setFacing(previous);
+        writeFacing(previous);
+        return;
+      }
+
+      const name = typeof error === "string" ? error : error.name;
+      if (name === "NotAllowedError" || name === "PermissionDeniedError" || name === "SecurityError") {
+        setPhase({ kind: "denied" });
+        return;
+      }
+      setPhase({
+        kind: "error",
+        message: typeof error === "string" ? error : `${error.name}: ${error.message}`,
+      });
+    },
+    [switching],
+  );
+
+  const flip = useCallback(() => {
+    if (switching || busy) return;
+
+    const next: Facing = facing === "user" ? "environment" : "user";
+    facingBeforeSwitch.current = facing;
+    writeFacing(next);
+    setFacing(next);
+    setSwitching(true);
+  }, [busy, facing, switching]);
+
+  // react-webcam JSON-compares this prop and renegotiates the stream when it
+  // changes, which is the whole switching mechanism.
+  const videoConstraints = useMemo(
+    () => ({
+      facingMode: { ideal: facing },
+      width: { ideal: 1920 },
+      height: { ideal: 1080 },
+    }),
+    [facing],
+  );
 
   const shoot = useCallback(async () => {
     const video = webcamRef.current?.video;
@@ -184,14 +257,13 @@ export function CameraView({ onConfirm, overlay }: CameraViewProps) {
         ref={webcamRef}
         audio={false}
         playsInline
-        mirrored={false}
+        // CSS-only, so the selfie viewfinder reads like a mirror while
+        // captureFrame — which draws the raw video — still saves the true image.
+        mirrored={facing === "user"}
         screenshotFormat="image/jpeg"
+        onUserMedia={handleUserMedia}
         onUserMediaError={handleUserMediaError}
-        videoConstraints={{
-          facingMode: { ideal: "environment" },
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
-        }}
+        videoConstraints={videoConstraints}
         className="h-dvh w-full object-cover"
       />
 
@@ -226,16 +298,54 @@ export function CameraView({ onConfirm, overlay }: CameraViewProps) {
             </button>
           </>
         ) : (
-          <button
-            type="button"
-            onClick={shoot}
-            disabled={busy}
-            aria-label="Take a photo"
-            className="h-20 w-20 rounded-full border-4 border-white/70 bg-white/95 transition active:scale-95 disabled:opacity-50"
-          />
+          <>
+            <button
+              type="button"
+              onClick={shoot}
+              disabled={busy || switching}
+              aria-label="Take a photo"
+              className="h-20 w-20 rounded-full border-4 border-white/70 bg-white/95 transition active:scale-95 disabled:opacity-50"
+            />
+
+            {/* Absolutely placed so that adding it does not shove the shutter
+                off the centre of the screen. */}
+            {canFlip && (
+              <button
+                type="button"
+                onClick={flip}
+                disabled={switching}
+                aria-label={
+                  facing === "user" ? "Switch to the rear camera" : "Switch to the selfie camera"
+                }
+                className="absolute right-8 flex h-12 w-12 items-center justify-center rounded-full bg-white/20 text-white backdrop-blur-sm transition active:scale-95 disabled:opacity-40"
+              >
+                <FlipIcon />
+              </button>
+            )}
+          </>
         )}
       </div>
     </div>
+  );
+}
+
+/** Two arrows chasing each other round a circle: "turn the camera around". */
+function FlipIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      className="h-6 w-6"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <polyline points="23 4 23 10 17 10" />
+      <polyline points="1 20 1 14 7 14" />
+      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+    </svg>
   );
 }
 

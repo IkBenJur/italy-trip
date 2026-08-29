@@ -3,8 +3,12 @@
  *
  * /photos/:id/original sits behind RequireAuth, so a plain <a href> would send
  * no Authorization header and get a 401. The bytes are fetched with the token
- * instead — the server 302s to a presigned URL and fetch follows it — and then
- * handed to the browser as a download.
+ * instead, and then handed to the browser as a download.
+ *
+ * That Authorization header makes this a CORS request, which is why the API
+ * serves the bytes itself rather than redirecting to the bucket: a CORS fetch
+ * that follows a cross-origin redirect sends Origin: null and lands on an
+ * origin with no Access-Control-Allow-Origin, and the browser drops it.
  */
 import { getToken } from "~/lib/auth";
 import { photoService } from "~/services/photo.service";
