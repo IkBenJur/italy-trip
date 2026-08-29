@@ -87,6 +87,34 @@ Each capture carries a `client_id` generated once and reused on every retry.
 `UNIQUE (event_id, client_id)` on the server means a request that succeeded but
 whose response was lost answers 200 instead of storing a second copy.
 
+## Deploying to Railway
+
+The two services need to know each other's public URL. Railway's domain
+variables are **bare hostnames** — `${{Frontend.RAILWAY_PUBLIC_DOMAIN}}` expands
+to `app-production.up.railway.app`, with no `https://` on the front — so both
+sides normalise what they are given and prepend the scheme:
+
+```
+# backend service
+CORS_ORIGIN=${{Frontend.RAILWAY_PUBLIC_DOMAIN}}
+
+# frontend service — a BUILD argument, since Vite bakes it in at build time
+VITE_API_URL=${{Backend.RAILWAY_PUBLIC_DOMAIN}}
+```
+
+Either form works; a full `https://…` URL is passed through unchanged. Both
+accept a comma-separated list on the backend side, so local development and the
+deployed frontend can be allowed at once.
+
+Two things to check when the app loads but every request fails:
+
+- **The backend logs its resolved CORS allowlist at boot.** If it says
+  `resolved to no usable origins`, the variable reference did not expand —
+  check the service name and that the referenced service actually has a domain.
+- **A CORS failure is invisible server-side.** The response is a normal 200 that
+  the browser then refuses to hand to the page, so the server logs look healthy
+  while the app is completely broken.
+
 ## Backend
 
 - Entry point: `cmd/main.go` + `cmd/api.go`

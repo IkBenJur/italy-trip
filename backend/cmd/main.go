@@ -76,9 +76,19 @@ func run(ctx context.Context) error {
 
 	port := env.GetEnv("PORT", "8080")
 
+	// A CORS misconfiguration is invisible from the server's side — the response
+	// is a normal 200 that the browser then refuses to hand to the page — so the
+	// resolved allowlist is logged rather than left to be guessed at.
+	allowedOrigins := middleware.ParseOrigins(env.GetEnv("CORS_ORIGIN", "http://localhost:5173"))
+	if len(allowedOrigins) == 0 {
+		slog.Warn("CORS_ORIGIN resolved to no usable origins; every browser request will be blocked")
+	} else {
+		slog.Info("CORS allowlist", "origins", allowedOrigins)
+	}
+
 	api := Application{
 		Port:           port,
-		AllowedOrigins: middleware.ParseOrigins(env.GetEnv("CORS_ORIGIN", "http://localhost:5173")),
+		AllowedOrigins: allowedOrigins,
 		Queries:        queries,
 		Issuer:         issuer,
 		Storage:        store,
