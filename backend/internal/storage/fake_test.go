@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"io"
 	"strings"
 	"testing"
 	"time"
@@ -31,12 +32,21 @@ func TestFakeRoundTrip(t *testing.T) {
 		t.Fatalf("fake presigned URL %q should look like a signed URL", signed)
 	}
 
-	download, err := fake.PresignDownload(ctx, "photos/abc.jpg", "abc.jpg", time.Hour)
+	opened, err := fake.Open(ctx, "photos/abc.jpg")
 	if err != nil {
-		t.Fatalf("PresignDownload: %v", err)
+		t.Fatalf("Open: %v", err)
 	}
-	if !strings.Contains(download, "attachment") {
-		t.Fatalf("download URL %q should carry an attachment disposition", download)
+	defer opened.Body.Close()
+	got, err := io.ReadAll(opened.Body)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if string(got) != "bytes" || opened.ContentType != "image/jpeg" || opened.ContentLength != 5 {
+		t.Fatalf("Open = %q/%s/%d, want bytes/image/jpeg/5", got, opened.ContentType, opened.ContentLength)
+	}
+
+	if _, err := fake.Open(ctx, "photos/missing.jpg"); err == nil {
+		t.Fatal("Open of a missing key should fail")
 	}
 }
 
@@ -51,8 +61,8 @@ func TestContentDisposition(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		if got := contentDisposition(tt.in); got != tt.want {
-			t.Errorf("contentDisposition(%q) = %s, want %s", tt.in, got, tt.want)
+		if got := ContentDisposition(tt.in); got != tt.want {
+			t.Errorf("ContentDisposition(%q) = %s, want %s", tt.in, got, tt.want)
 		}
 	}
 }

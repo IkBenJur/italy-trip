@@ -119,24 +119,25 @@ func TestS3RoundTrip(t *testing.T) {
 		}
 	})
 
-	t.Run("download disposition", func(t *testing.T) {
-		download, err := store.PresignDownload(ctx, key, "italy.jpg", time.Hour)
+	t.Run("open streams the object back", func(t *testing.T) {
+		opened, err := store.Open(ctx, key)
 		if err != nil {
-			t.Fatalf("PresignDownload: %v", err)
+			t.Fatalf("Open: %v", err)
 		}
+		defer opened.Body.Close()
 
-		res, err := http.Get(download)
+		got, err := io.ReadAll(opened.Body)
 		if err != nil {
-			t.Fatalf("GET: %v", err)
+			t.Fatalf("read: %v", err)
 		}
-		defer res.Body.Close()
-		io.Copy(io.Discard, res.Body)
-
-		if res.StatusCode != http.StatusOK {
-			t.Fatalf("GET download URL = %d, want 200", res.StatusCode)
+		if !bytes.Equal(got, payload) {
+			t.Fatalf("Open returned %d bytes, want the %d that were put", len(got), len(payload))
 		}
-		if got := res.Header.Get("Content-Disposition"); !strings.Contains(got, "attachment") {
-			t.Fatalf("Content-Disposition = %q, want an attachment disposition", got)
+		if opened.ContentType != "application/octet-stream" {
+			t.Fatalf("ContentType = %q, want application/octet-stream", opened.ContentType)
+		}
+		if opened.ContentLength != int64(len(payload)) {
+			t.Fatalf("ContentLength = %d, want %d", opened.ContentLength, len(payload))
 		}
 	})
 }

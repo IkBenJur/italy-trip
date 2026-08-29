@@ -1,6 +1,7 @@
 package photos
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -166,28 +167,66 @@ func TestAlbumOpensOnceTheEventIsOver(t *testing.T) {
 	}
 }
 
-func TestOriginalRedirectsOnceTheEventIsOver(t *testing.T) {
+func TestOriginalServesTheBytesOnceTheEventIsOver(t *testing.T) {
 	h := newHarness(t, afterEvent)
 	photo := h.seedPhoto(t, time.Date(2026, 9, 6, 12, 30, 45, 0, time.UTC))
+	h.store.Put(context.Background(), photo.StorageKey, strings.NewReader("original-bytes"), "image/jpeg", 14)
 
 	res := h.do(httptest.NewRequest(http.MethodGet, "/photos/"+uuidString(photo.ID)+"/original", nil), true)
-	if res.Code != http.StatusFound {
-		t.Fatalf("status = %d, want 302; body: %s", res.Code, readBody(t, res))
+	if res.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body: %s", res.Code, readBody(t, res))
 	}
 
-	location := res.Header().Get("Location")
-	if !strings.Contains(location, "X-Amz-Signature") {
-		t.Fatalf("redirect target is not a signed URL: %s", location)
+	// A 302 to the bucket is what broke downloads in the browser: the redirect
+	// leaves this origin, and the bucket sends no CORS headers.
+	if location := res.Header().Get("Location"); location != "" {
+		t.Fatalf("response redirects to %s; the bytes must come from this origin", location)
 	}
-	if !strings.Contains(location, photo.StorageKey) {
-		t.Fatalf("redirect target does not point at the original: %s", location)
+	if body := res.Body.String(); body != "original-bytes" {
+		t.Fatalf("body = %q, want the stored original", body)
 	}
+
 	// This is what makes "download" save to the camera roll rather than open a tab.
-	if !strings.Contains(location, "attachment") {
-		t.Fatalf("redirect target carries no attachment disposition: %s", location)
+	disposition := res.Header().Get("Content-Disposition")
+	if !strings.Contains(disposition, "attachment") {
+		t.Errorf("Content-Disposition = %q, want an attachment", disposition)
 	}
-	if !strings.Contains(location, "italy-20260906-123045.jpg") {
-		t.Fatalf("download filename is not derived from taken_at: %s", location)
+	if !strings.Contains(disposition, "italy-20260906-123045.jpg") {
+		t.Errorf("download filename is not derived from taken_at: %s", disposition)
+	}
+	if ct := res.Header().Get("Content-Type"); ct != "image/jpeg" {
+		t.Errorf("Content-Type = %q, want image/jpeg", ct)
+	}
+}
+
+// A signed bucket URL must never reach the client for an original: following it
+// is exactly the cross-origin hop the browser refuses.
+func TestOriginalLeaksNoSignedURL(t *testing.T) {
+	h := newHarness(t, afterEvent)
+	photo := h.seedPhoto(t, time.Date(2026, 9, 6, 12, 30, 45, 0, time.UTC))
+	h.store.Put(context.Background(), photo.StorageKey, strings.NewReader("original-bytes"), "image/jpeg", 14)
+
+	res := h.do(httptest.NewRequest(http.MethodGet, "/photos/"+uuidString(photo.ID)+"/original", nil), true)
+	for key, values := range res.Header() {
+		for _, value := range values {
+			if strings.Contains(value, "X-Amz-Signature") {
+				t.Fatalf("header %s carries a signed URL: %s", key, value)
+			}
+		}
+	}
+}
+
+func TestOriginalIsStillLockedWhileTheEventRuns(t *testing.T) {
+	h := newHarness(t, duringEvent)
+	photo := h.seedPhoto(t, time.Date(2026, 9, 6, 12, 30, 45, 0, time.UTC))
+	h.store.Put(context.Background(), photo.StorageKey, strings.NewReader("original-bytes"), "image/jpeg", 14)
+
+	res := h.do(httptest.NewRequest(http.MethodGet, "/photos/"+uuidString(photo.ID)+"/original", nil), true)
+	if res.Code != http.StatusLocked {
+		t.Fatalf("status = %d, want 423; body: %s", res.Code, readBody(t, res))
+	}
+	if body := readBody(t, res); strings.Contains(body, "original-bytes") {
+		t.Fatal("the locked response contains the photo bytes")
 	}
 }
 

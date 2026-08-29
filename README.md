@@ -51,7 +51,7 @@ either a forgeable session or a wrong unlock date.
 | `GET` | `/events/current` | 200, `is_over:false`, no URLs | 200, `is_over:true` |
 | `POST` | `/events/current/photos` | 201 (or 200 if duplicate) | **423 Locked** |
 | `GET` | `/events/current/photos` | **423 Locked** | 200, list with presigned URLs |
-| `GET` | `/photos/:id/original` | **423 Locked** | 302 to a presigned URL |
+| `GET` | `/photos/:id/original` | **423 Locked** | 200, the bytes as an attachment |
 
 `events.Event.IsOver(now)` in `internal/events/service.go` is the single source
 of truth, and the boundary is inclusive: at exactly `ends_at`, the album opens.
