@@ -13,6 +13,12 @@ import { queryClient } from "~/lib/queryClient";
 import "./app.css";
 
 export const links: Route.LinksFunction = () => [
+  // Browsers take the first format they understand, so the emoji goes first and
+  // the drawn tricolour catches everything else. iOS Safari — the browser this
+  // app is actually used in — ignores SVG favicons entirely and lands on the .ico.
+  { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
+  { rel: "icon", href: "/favicon.ico", sizes: "48x48" },
+  { rel: "apple-touch-icon", href: "/favicon-192.png" },
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
   {
     rel: "preconnect",
