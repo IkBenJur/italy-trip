@@ -34,6 +34,7 @@ type Querier interface {
 	// Used when a refresh token is presented for reuse (it was already rotated),
 	// which means it leaked: the whole family is revoked rather than just this one.
 	RevokeRefreshTokensForUser(ctx context.Context, userID pgtype.UUID) error
+	SetActiveEvent(ctx context.Context, arg SetActiveEventParams) error
 }
 
 var _ Querier = (*Queries)(nil)

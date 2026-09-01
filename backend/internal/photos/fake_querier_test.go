@@ -207,3 +207,7 @@ func (f *fakeQuerier) RevokeRefreshToken(ctx context.Context, id pgtype.UUID) er
 func (f *fakeQuerier) RevokeRefreshTokensForUser(ctx context.Context, userID pgtype.UUID) error {
 	return nil
 }
+
+func (f *fakeQuerier) SetActiveEvent(ctx context.Context, arg repo.SetActiveEventParams) error {
+	return nil
+}

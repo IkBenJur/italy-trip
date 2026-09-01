@@ -24,19 +24,25 @@ func (q *Queries) CountPhotos(ctx context.Context, eventID pgtype.UUID) (int64, 
 }
 
 const createEvent = `-- name: CreateEvent :one
-INSERT INTO events (name, starts_at, ends_at)
-VALUES ($1, $2, $3)
-RETURNING id, name, starts_at, ends_at, created_at, updated_at
+INSERT INTO events (name, starts_at, ends_at, user_id)
+VALUES ($1, $2, $3, $4)
+RETURNING id, name, starts_at, ends_at, created_at, updated_at, user_id
 `
 
 type CreateEventParams struct {
 	Name     string             `json:"name"`
 	StartsAt pgtype.Timestamptz `json:"starts_at"`
 	EndsAt   pgtype.Timestamptz `json:"ends_at"`
+	UserID   pgtype.UUID        `json:"user_id"`
 }
 
 func (q *Queries) CreateEvent(ctx context.Context, arg CreateEventParams) (Event, error) {
-	row := q.db.QueryRow(ctx, createEvent, arg.Name, arg.StartsAt, arg.EndsAt)
+	row := q.db.QueryRow(ctx, createEvent,
+		arg.Name,
+		arg.StartsAt,
+		arg.EndsAt,
+		arg.UserID,
+	)
 	var i Event
 	err := row.Scan(
 		&i.ID,
@@ -45,12 +51,13 @@ func (q *Queries) CreateEvent(ctx context.Context, arg CreateEventParams) (Event
 		&i.EndsAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.UserID,
 	)
 	return i, err
 }
 
 const getCurrentEvent = `-- name: GetCurrentEvent :one
-SELECT id, name, starts_at, ends_at, created_at, updated_at FROM events
+SELECT id, name, starts_at, ends_at, created_at, updated_at, user_id FROM events
 ORDER BY created_at DESC
 LIMIT 1
 `
@@ -67,6 +74,7 @@ func (q *Queries) GetCurrentEvent(ctx context.Context) (Event, error) {
 		&i.EndsAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.UserID,
 	)
 	return i, err
 }
