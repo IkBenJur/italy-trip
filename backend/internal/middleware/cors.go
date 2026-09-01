@@ -26,6 +26,10 @@ func CORS(allowedOrigins []string) gin.HandlerFunc {
 
 		if _, ok := allowed[origin]; ok {
 			c.Header("Access-Control-Allow-Origin", origin)
+			// Needed so the browser sends and stores the refresh-token cookie on
+			// cross-origin requests. Safe only because the origin above is echoed
+			// from an allowlist, never a wildcard.
+			c.Header("Access-Control-Allow-Credentials", "true")
 			c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 			c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization")
 			c.Header("Access-Control-Max-Age", "600")

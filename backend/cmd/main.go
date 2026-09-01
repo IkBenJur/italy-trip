@@ -35,6 +35,7 @@ func run(ctx context.Context) error {
 	jwtSecret := env.MustGet("JWT_SECRET")
 	jwtTTL := time.Duration(env.GetEnvInt("JWT_TTL_HOURS", 24)) * time.Hour
 	issuer := auth.NewTokenIssuer(jwtSecret, jwtTTL)
+	refreshTokenTTL := time.Duration(env.GetEnvInt("REFRESH_TOKEN_TTL_HOURS", 24*30)) * time.Hour
 
 	seedUser := events.SeedUserFromEnv()
 
@@ -84,12 +85,13 @@ func run(ctx context.Context) error {
 	}
 
 	api := Application{
-		Port:           port,
-		AllowedOrigins: allowedOrigins,
-		Queries:        queries,
-		Issuer:         issuer,
-		Storage:        store,
-		MaxUploadBytes: env.GetEnvInt64("MAX_UPLOAD_BYTES", photos.DefaultMaxUploadBytes),
+		Port:            port,
+		AllowedOrigins:  allowedOrigins,
+		Queries:         queries,
+		Issuer:          issuer,
+		RefreshTokenTTL: refreshTokenTTL,
+		Storage:         store,
+		MaxUploadBytes:  env.GetEnvInt64("MAX_UPLOAD_BYTES", photos.DefaultMaxUploadBytes),
 	}
 
 	slog.Info("Starting server")

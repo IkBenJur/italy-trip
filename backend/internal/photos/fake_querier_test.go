@@ -188,3 +188,22 @@ func (f *fakeQuerier) CreateEvent(ctx context.Context, arg repo.CreateEventParam
 	f.event.EndsAt = arg.EndsAt
 	return f.event, nil
 }
+
+// The photos tests never exercise refresh tokens, so these exist only to
+// satisfy repo.Querier.
+
+func (f *fakeQuerier) CreateRefreshToken(ctx context.Context, arg repo.CreateRefreshTokenParams) (repo.RefreshToken, error) {
+	return repo.RefreshToken{}, nil
+}
+
+func (f *fakeQuerier) FindRefreshTokenByHash(ctx context.Context, tokenHash string) (repo.RefreshToken, error) {
+	return repo.RefreshToken{}, pgx.ErrNoRows
+}
+
+func (f *fakeQuerier) RevokeRefreshToken(ctx context.Context, id pgtype.UUID) error {
+	return nil
+}
+
+func (f *fakeQuerier) RevokeRefreshTokensForUser(ctx context.Context, userID pgtype.UUID) error {
+	return nil
+}

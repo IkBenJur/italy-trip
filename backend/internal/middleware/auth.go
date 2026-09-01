@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 
@@ -29,13 +30,16 @@ func RequireAuth(issuer *auth.TokenIssuer, queries repo.Querier) gin.HandlerFunc
 
 		claims, err := issuer.Verify(parts[1])
 		if err != nil {
-			json.WriteErrorFromString(c, http.StatusUnauthorized, "invalid or expired token")
+			if errors.Is(err, auth.ErrExpiredToken) {
+				// "token_expired" tells the client a refresh can fix this, as
+				// opposed to a token that will never be valid again.
+				json.WriteErrorWithCode(c, http.StatusUnauthorized, "token expired", "token_expired")
+			} else {
+				json.WriteErrorFromString(c, http.StatusUnauthorized, "invalid token")
+			}
 			c.Abort()
 			return
 		}
-
-		// TODO claims.expiredAt is expired. Then return
-		// Return token expired.
 
 		userID, err := utils.ParseUUID(claims.UserID)
 		if err != nil {

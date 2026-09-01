@@ -16,9 +16,11 @@ type Querier interface {
 	// The id is supplied by the caller rather than defaulted, because the storage
 	// keys (photos/{id}.jpg, thumbs/{id}.jpg) are written before the row exists.
 	CreatePhoto(ctx context.Context, arg CreatePhotoParams) (Photo, error)
+	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (RefreshToken, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	FindPhotoByClientId(ctx context.Context, arg FindPhotoByClientIdParams) (Photo, error)
 	FindPhotoById(ctx context.Context, id pgtype.UUID) (Photo, error)
+	FindRefreshTokenByHash(ctx context.Context, tokenHash string) (RefreshToken, error)
 	FindUserByEmail(ctx context.Context, email string) (User, error)
 	FindUserById(ctx context.Context, id pgtype.UUID) (User, error)
 	// "Current" is the most recently started event; older events and their photos
@@ -28,6 +30,10 @@ type Querier interface {
 	// differ, and the album should read chronologically.
 	ListPhotosByEvent(ctx context.Context, eventID pgtype.UUID) ([]Photo, error)
 	ListUsers(ctx context.Context) ([]User, error)
+	RevokeRefreshToken(ctx context.Context, id pgtype.UUID) error
+	// Used when a refresh token is presented for reuse (it was already rotated),
+	// which means it leaked: the whole family is revoked rather than just this one.
+	RevokeRefreshTokensForUser(ctx context.Context, userID pgtype.UUID) error
 }
 
 var _ Querier = (*Queries)(nil)
