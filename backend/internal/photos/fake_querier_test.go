@@ -180,7 +180,7 @@ func (f *fakeQuerier) ListUsers(ctx context.Context) ([]repo.User, error) {
 	return out, nil
 }
 
-func (f *fakeQuerier) UpsertSingletonEvent(ctx context.Context, arg repo.UpsertSingletonEventParams) (repo.Event, error) {
+func (f *fakeQuerier) CreateEvent(ctx context.Context, arg repo.CreateEventParams) (repo.Event, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.event.Name = arg.Name

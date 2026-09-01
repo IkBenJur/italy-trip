@@ -34,10 +34,9 @@ npm run dev
 # -> http://localhost:5173
 ```
 
-The backend refuses to boot without `JWT_SECRET`, `EVENT_NAME`,
-`EVENT_STARTS_AT`, `EVENT_ENDS_AT`, `SEED_USER_EMAIL`, `SEED_USER_PASSWORD` and
-`AWS_S3_BUCKET_NAME`. That is deliberate: a silent default for any of them is
-either a forgeable session or a wrong unlock date.
+The backend refuses to boot without `JWT_SECRET`, `SEED_USER_EMAIL`,
+`SEED_USER_PASSWORD` and `AWS_S3_BUCKET_NAME`. That is deliberate: a silent
+default for any of them is a forgeable session.
 
 > **The camera needs HTTPS.** `navigator.mediaDevices` is only *defined* on
 > `https://`, `localhost` or `127.0.0.1`. On `http://192.168.x.x` it is
@@ -65,16 +64,16 @@ on boot.
 
 ## Event configuration
 
-The event is synced from the environment on **every boot** (it upserts a
-singleton row), so the unlock date is a Railway variable you change with a
-redeploy rather than manual SQL. Timestamps must be RFC3339 **with an offset** —
-a bare date is rejected at boot:
+Events are started from the app itself rather than from the environment: an
+authenticated user opens **New event** from the album screen (only reachable
+once the current event is over) and picks a start and end date/time. That
+calls `POST /events`, which refuses if the current event hasn't ended yet.
+Older events, and their photos, are kept — `GET /events/current` always
+resolves to the most recently started one. The name is fixed
+(`events.DefaultEventName`), since the app only ever runs one named trip.
 
-```
-EVENT_NAME="Italy Trip"
-EVENT_STARTS_AT=2026-09-05T00:00:00+02:00
-EVENT_ENDS_AT=2026-09-14T23:59:59+02:00
-```
+A fresh deploy has no event at all until the first one is started this way;
+the frontend shows a prompt for that instead of the usual camera/album screens.
 
 ## Offline captures
 

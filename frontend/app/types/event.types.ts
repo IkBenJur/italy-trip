@@ -15,6 +15,12 @@ export interface EventInfo {
   photo_count: number;
 }
 
+/** Input for starting a new event. Both are RFC3339 with an offset. */
+export interface CreateEventInput {
+  starts_at: string;
+  ends_at: string;
+}
+
 /** A photo in the album. Only ever returned once the event is over. */
 export interface Photo {
   id: string;

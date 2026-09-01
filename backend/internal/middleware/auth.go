@@ -34,6 +34,9 @@ func RequireAuth(issuer *auth.TokenIssuer, queries repo.Querier) gin.HandlerFunc
 			return
 		}
 
+		// TODO claims.expiredAt is expired. Then return
+		// Return token expired.
+
 		userID, err := utils.ParseUUID(claims.UserID)
 		if err != nil {
 			json.WriteErrorFromString(c, http.StatusUnauthorized, "invalid token subject")

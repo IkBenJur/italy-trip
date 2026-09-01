@@ -7,8 +7,13 @@ import (
 	"github.com/IkBenJur/italy-trip/internal/utils"
 )
 
-// Event is the domain view of the singleton event row, with real time.Time
-// values rather than pgtype wrappers.
+// DefaultEventName is used for every event started through the API. The app
+// only ever runs one named trip, so the name is not something the person
+// starting a new event needs to type.
+const DefaultEventName = "Italy Trip"
+
+// Event is the domain view of an event row, with real time.Time values rather
+// than pgtype wrappers.
 type Event struct {
 	ID       string
 	Name     string

@@ -36,9 +36,6 @@ func run(ctx context.Context) error {
 	jwtTTL := time.Duration(env.GetEnvInt("JWT_TTL_HOURS", 24)) * time.Hour
 	issuer := auth.NewTokenIssuer(jwtSecret, jwtTTL)
 
-	// Parsed at boot so a malformed unlock date fails loudly here rather than
-	// silently changing when the album opens.
-	eventConfig := events.ConfigFromEnv()
 	seedUser := events.SeedUserFromEnv()
 
 	dsn := env.GetEnv("GOOSE_DBSTRING", "host=localhost user=postgres password=postgres dbname=italy-trip sslmode=disable")
@@ -59,8 +56,8 @@ func run(ctx context.Context) error {
 
 	queries := repo.New(conn)
 
-	if _, err := events.Seed(ctx, queries, eventConfig, seedUser); err != nil {
-		slog.Error("Failed to seed event", "error", err)
+	if err := events.SeedSharedUser(ctx, queries, seedUser); err != nil {
+		slog.Error("Failed to seed shared user", "error", err)
 		return err
 	}
 

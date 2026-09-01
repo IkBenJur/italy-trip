@@ -48,6 +48,7 @@ func (app *Application) Mount() http.Handler {
 	authorized := router.Group("/", middleware.RequireAuth(app.Issuer, app.Queries))
 	authorized.GET("users/me", userHandler.Me)
 	authorized.GET("events/current", eventHandler.Current)
+	authorized.POST("events", eventHandler.Create)
 	authorized.POST("events/current/photos", photoHandler.Upload)
 	authorized.GET("events/current/photos", photoHandler.List)
 	authorized.GET("photos/:id/original", photoHandler.Original)

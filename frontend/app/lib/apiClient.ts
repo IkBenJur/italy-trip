@@ -23,6 +23,12 @@ export class ApiError extends Error {
     return this.status === 401;
   }
 
+  get isNotFound() {
+    return this.status === 404;
+  }
+
+  // Add getIsTokenExpired
+
   /** 4xx other than 423 will never succeed on a retry. */
   get isPermanent() {
     return this.status >= 400 && this.status < 500 && this.status !== 423;
@@ -61,6 +67,9 @@ class ApiClient {
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
 
+    // TODO Add token expired check.
+    // If token expired. Retrieve new token.
+    // Refetch with new token.
     return this.parse<T>(res);
   }
 

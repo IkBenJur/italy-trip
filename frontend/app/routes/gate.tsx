@@ -1,7 +1,10 @@
+import { useState } from "react";
 import { Navigate, Outlet, useLocation } from "react-router";
 import { useEvent } from "~/hooks/useEvent";
 import { getToken } from "~/lib/auth";
 import { ApiError } from "~/lib/apiClient";
+import { CreateEventModal } from "~/components/CreateEventModal";
+import { Button } from "~/components/ui/Button";
 import type { EventInfo } from "~/types/event.types";
 
 /**
@@ -16,6 +19,7 @@ import type { EventInfo } from "~/types/event.types";
 export default function Gate() {
   const location = useLocation();
   const { data: event, isPending, error } = useEvent();
+  const [showCreateEvent, setShowCreateEvent] = useState(false);
 
   if (!getToken()) {
     return <Navigate to="/login" replace />;
@@ -28,6 +32,19 @@ export default function Gate() {
   if (error) {
     if (error instanceof ApiError && error.isUnauthorized) {
       return <Navigate to="/login" replace />;
+    }
+    if (error instanceof ApiError && error.isNotFound) {
+      return (
+        <>
+          <Splash>
+            <p className="font-medium">No event has been started yet.</p>
+            <Button className="mt-4" onClick={() => setShowCreateEvent(true)}>
+              Start an event
+            </Button>
+          </Splash>
+          <CreateEventModal open={showCreateEvent} onClose={() => setShowCreateEvent(false)} />
+        </>
+      );
     }
     return (
       <Splash>

@@ -12,6 +12,7 @@ import (
 
 type Querier interface {
 	CountPhotos(ctx context.Context, eventID pgtype.UUID) (int64, error)
+	CreateEvent(ctx context.Context, arg CreateEventParams) (Event, error)
 	// The id is supplied by the caller rather than defaulted, because the storage
 	// keys (photos/{id}.jpg, thumbs/{id}.jpg) are written before the row exists.
 	CreatePhoto(ctx context.Context, arg CreatePhotoParams) (Photo, error)
@@ -20,14 +21,13 @@ type Querier interface {
 	FindPhotoById(ctx context.Context, id pgtype.UUID) (Photo, error)
 	FindUserByEmail(ctx context.Context, email string) (User, error)
 	FindUserById(ctx context.Context, id pgtype.UUID) (User, error)
+	// "Current" is the most recently started event; older events and their photos
+	// stay in the table as history once a new one is started.
 	GetCurrentEvent(ctx context.Context) (Event, error)
 	// Ordered by capture time, not upload time: the offline retry queue means those
 	// differ, and the album should read chronologically.
 	ListPhotosByEvent(ctx context.Context, eventID pgtype.UUID) ([]Photo, error)
 	ListUsers(ctx context.Context) ([]User, error)
-	// Keyed on the events_singleton_idx expression index, so a second boot updates
-	// the existing row in place instead of creating a second event.
-	UpsertSingletonEvent(ctx context.Context, arg UpsertSingletonEventParams) (Event, error)
 }
 
 var _ Querier = (*Queries)(nil)

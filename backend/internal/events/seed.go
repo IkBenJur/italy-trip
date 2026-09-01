@@ -10,7 +10,6 @@ import (
 	"github.com/IkBenJur/italy-trip/internal/env"
 	repo "github.com/IkBenJur/italy-trip/internal/postgres/sqlc"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // SeedUser is the one shared login. Registration is closed, so if this account
@@ -27,33 +26,10 @@ func SeedUserFromEnv() SeedUser {
 	}
 }
 
-// Seed brings the database in line with the environment on every boot. It is
-// idempotent: the event row is upserted and the shared user is only created if
-// absent, so booting twice leaves exactly one of each.
-//
-// Syncing the event from env is what makes EVENT_ENDS_AT a Railway variable you
-// can change with a redeploy rather than something needing manual SQL.
-func Seed(ctx context.Context, queries repo.Querier, cfg Config, seedUser SeedUser) (Event, error) {
-	row, err := queries.UpsertSingletonEvent(ctx, repo.UpsertSingletonEventParams{
-		Name:     cfg.Name,
-		StartsAt: pgtype.Timestamptz{Time: cfg.StartsAt, Valid: true},
-		EndsAt:   pgtype.Timestamptz{Time: cfg.EndsAt, Valid: true},
-	})
-	if err != nil {
-		return Event{}, fmt.Errorf("upsert event: %w", err)
-	}
-
-	event := FromRow(row)
-	slog.Info("Event synced from env", "id", event.ID, "name", event.Name, "ends_at", event.EndsAt.UTC())
-
-	if err := seedSharedUser(ctx, queries, seedUser); err != nil {
-		return Event{}, err
-	}
-
-	return event, nil
-}
-
-func seedSharedUser(ctx context.Context, queries repo.Querier, seedUser SeedUser) error {
+// SeedSharedUser brings the shared login in line with the environment on every
+// boot. It is idempotent: the user is only created if absent, so booting twice
+// leaves exactly one.
+func SeedSharedUser(ctx context.Context, queries repo.Querier, seedUser SeedUser) error {
 	existing, err := queries.FindUserByEmail(ctx, seedUser.Email)
 	if err == nil {
 		slog.Info("Shared user already present", "email", existing.Email)
