@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/IkBenJur/italy-trip/internal/auth"
 	"github.com/IkBenJur/italy-trip/internal/events"
@@ -16,12 +17,13 @@ import (
 )
 
 type Application struct {
-	Port           string
-	AllowedOrigins []string
-	Queries        repo.Querier
-	Issuer         *auth.TokenIssuer
-	Storage        storage.Storage
-	MaxUploadBytes int64
+	Port            string
+	AllowedOrigins  []string
+	Queries         repo.Querier
+	Issuer          *auth.TokenIssuer
+	RefreshTokenTTL time.Duration
+	Storage         storage.Storage
+	MaxUploadBytes  int64
 }
 
 func (app *Application) Mount() http.Handler {
@@ -35,19 +37,23 @@ func (app *Application) Mount() http.Handler {
 		})
 	})
 
-	userHandler := users.NewHandler(app.Queries, app.Issuer)
+	userHandler := users.NewHandler(app.Queries, app.Issuer, app.RefreshTokenTTL)
 	eventHandler := events.NewHandler(app.Queries)
 
 	// There is no registration route. With one shared account and an album that
 	// unlocks for any authenticated user, an open sign-up would let a stranger
 	// register today and read the whole album later.
 	router.POST("/auth/login", userHandler.Login)
+	// Not behind RequireAuth: its entire purpose is to work once the access
+	// token has already expired. It authenticates off the refresh cookie instead.
+	router.POST("/auth/refresh", userHandler.Refresh)
 
 	photoHandler := photos.NewHandler(app.Queries, app.Storage, app.MaxUploadBytes)
 
 	authorized := router.Group("/", middleware.RequireAuth(app.Issuer, app.Queries))
 	authorized.GET("users/me", userHandler.Me)
 	authorized.GET("events/current", eventHandler.Current)
+	authorized.POST("events", eventHandler.Create)
 	authorized.POST("events/current/photos", photoHandler.Upload)
 	authorized.GET("events/current/photos", photoHandler.List)
 	authorized.GET("photos/:id/original", photoHandler.Original)

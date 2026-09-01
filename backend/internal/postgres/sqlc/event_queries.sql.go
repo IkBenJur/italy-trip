@@ -23,14 +23,20 @@ func (q *Queries) CountPhotos(ctx context.Context, eventID pgtype.UUID) (int64, 
 	return count, err
 }
 
-const getCurrentEvent = `-- name: GetCurrentEvent :one
-SELECT id, name, starts_at, ends_at, created_at, updated_at FROM events
-ORDER BY created_at
-LIMIT 1
+const createEvent = `-- name: CreateEvent :one
+INSERT INTO events (name, starts_at, ends_at)
+VALUES ($1, $2, $3)
+RETURNING id, name, starts_at, ends_at, created_at, updated_at
 `
 
-func (q *Queries) GetCurrentEvent(ctx context.Context) (Event, error) {
-	row := q.db.QueryRow(ctx, getCurrentEvent)
+type CreateEventParams struct {
+	Name     string             `json:"name"`
+	StartsAt pgtype.Timestamptz `json:"starts_at"`
+	EndsAt   pgtype.Timestamptz `json:"ends_at"`
+}
+
+func (q *Queries) CreateEvent(ctx context.Context, arg CreateEventParams) (Event, error) {
+	row := q.db.QueryRow(ctx, createEvent, arg.Name, arg.StartsAt, arg.EndsAt)
 	var i Event
 	err := row.Scan(
 		&i.ID,
@@ -43,27 +49,16 @@ func (q *Queries) GetCurrentEvent(ctx context.Context) (Event, error) {
 	return i, err
 }
 
-const upsertSingletonEvent = `-- name: UpsertSingletonEvent :one
-INSERT INTO events (name, starts_at, ends_at)
-VALUES ($1, $2, $3)
-ON CONFLICT ((TRUE)) DO UPDATE
-SET name = EXCLUDED.name,
-    starts_at = EXCLUDED.starts_at,
-    ends_at = EXCLUDED.ends_at,
-    updated_at = now()
-RETURNING id, name, starts_at, ends_at, created_at, updated_at
+const getCurrentEvent = `-- name: GetCurrentEvent :one
+SELECT id, name, starts_at, ends_at, created_at, updated_at FROM events
+ORDER BY created_at DESC
+LIMIT 1
 `
 
-type UpsertSingletonEventParams struct {
-	Name     string             `json:"name"`
-	StartsAt pgtype.Timestamptz `json:"starts_at"`
-	EndsAt   pgtype.Timestamptz `json:"ends_at"`
-}
-
-// Keyed on the events_singleton_idx expression index, so a second boot updates
-// the existing row in place instead of creating a second event.
-func (q *Queries) UpsertSingletonEvent(ctx context.Context, arg UpsertSingletonEventParams) (Event, error) {
-	row := q.db.QueryRow(ctx, upsertSingletonEvent, arg.Name, arg.StartsAt, arg.EndsAt)
+// "Current" is the most recently started event; older events and their photos
+// stay in the table as history once a new one is started.
+func (q *Queries) GetCurrentEvent(ctx context.Context) (Event, error) {
+	row := q.db.QueryRow(ctx, getCurrentEvent)
 	var i Event
 	err := row.Scan(
 		&i.ID,

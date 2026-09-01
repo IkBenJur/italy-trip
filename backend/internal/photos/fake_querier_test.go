@@ -180,11 +180,30 @@ func (f *fakeQuerier) ListUsers(ctx context.Context) ([]repo.User, error) {
 	return out, nil
 }
 
-func (f *fakeQuerier) UpsertSingletonEvent(ctx context.Context, arg repo.UpsertSingletonEventParams) (repo.Event, error) {
+func (f *fakeQuerier) CreateEvent(ctx context.Context, arg repo.CreateEventParams) (repo.Event, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.event.Name = arg.Name
 	f.event.StartsAt = arg.StartsAt
 	f.event.EndsAt = arg.EndsAt
 	return f.event, nil
+}
+
+// The photos tests never exercise refresh tokens, so these exist only to
+// satisfy repo.Querier.
+
+func (f *fakeQuerier) CreateRefreshToken(ctx context.Context, arg repo.CreateRefreshTokenParams) (repo.RefreshToken, error) {
+	return repo.RefreshToken{}, nil
+}
+
+func (f *fakeQuerier) FindRefreshTokenByHash(ctx context.Context, tokenHash string) (repo.RefreshToken, error) {
+	return repo.RefreshToken{}, pgx.ErrNoRows
+}
+
+func (f *fakeQuerier) RevokeRefreshToken(ctx context.Context, id pgtype.UUID) error {
+	return nil
+}
+
+func (f *fakeQuerier) RevokeRefreshTokensForUser(ctx context.Context, userID pgtype.UUID) error {
+	return nil
 }

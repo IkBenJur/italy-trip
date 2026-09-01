@@ -4,6 +4,7 @@
 package photos
 
 import (
+	"errors"
 	"net/http"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	repo "github.com/IkBenJur/italy-trip/internal/postgres/sqlc"
 	"github.com/IkBenJur/italy-trip/internal/storage"
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
 )
 
 // DefaultMaxUploadBytes is 15 MB. A 1080p frame at quality 0.92 is 200-400 KB,
@@ -52,6 +54,10 @@ const lockedMessage = "the event is not over yet"
 func (h *Handler) loadEvent(c *gin.Context) (repo.Event, bool) {
 	row, err := h.Queries.GetCurrentEvent(c)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			json.WriteErrorFromString(c, http.StatusNotFound, "no event has been started yet")
+			return repo.Event{}, false
+		}
 		json.WriteErrorFromStringWithErrorObjectLog(c, http.StatusInternalServerError, "failed to load event", err)
 		return repo.Event{}, false
 	}

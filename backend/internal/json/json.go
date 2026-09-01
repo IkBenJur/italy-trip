@@ -17,6 +17,14 @@ func WriteErrorFromString(c *gin.Context, status int, error string) {
 	c.JSON(status, gin.H{"error": error})
 }
 
+// WriteErrorWithCode adds a machine-readable "code" alongside the message, for
+// the few error cases a client needs to branch on rather than just display -
+// e.g. telling an expired access token apart from one that's invalid outright.
+func WriteErrorWithCode(c *gin.Context, status int, error string, code string) {
+	slog.Error(error)
+	c.JSON(status, gin.H{"error": error, "code": code})
+}
+
 // Want to have proper error in log but don't send message to client
 func WriteErrorFromStringWithErrorObjectLog(c *gin.Context, status int, errorString string, error error) {
 	slog.Error(error.Error())

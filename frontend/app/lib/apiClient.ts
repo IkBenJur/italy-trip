@@ -1,5 +1,6 @@
 import { env } from "~/lib/env";
-import { getToken } from "~/lib/auth";
+import { getToken, setToken, clearToken } from "~/lib/auth";
+import type { AuthResponse } from "~/types/user.types";
 
 /**
  * ApiError keeps the HTTP status alongside the message. The status matters:
@@ -8,11 +9,13 @@ import { getToken } from "~/lib/auth";
  */
 export class ApiError extends Error {
   readonly status: number;
+  readonly code?: string;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, code?: string) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.code = code;
   }
 
   get isLocked() {
@@ -23,14 +26,29 @@ export class ApiError extends Error {
     return this.status === 401;
   }
 
+  get isNotFound() {
+    return this.status === 404;
+  }
+
+  /** A 401 caused specifically by an expired access token, as opposed to one
+   * that will never succeed (missing/malformed/forged). Only this kind is
+   * worth retrying after a token refresh. */
+  get isTokenExpired() {
+    return this.status === 401 && this.code === "token_expired";
+  }
+
   /** 4xx other than 423 will never succeed on a retry. */
   get isPermanent() {
     return this.status >= 400 && this.status < 500 && this.status !== 423;
   }
 }
 
-class ApiClient {
+export class ApiClient {
   private baseUrl: string;
+
+  /** Coalesces concurrent 401s onto one refresh call instead of each one
+   * racing the backend's token rotation and stepping on each other. */
+  private refreshPromise: Promise<string> | null = null;
 
   constructor(baseUrl: string) {
     this.baseUrl = baseUrl.replace(/\/$/, "");
@@ -44,7 +62,7 @@ class ApiClient {
   private async parse<T>(res: Response): Promise<T> {
     if (!res.ok) {
       const payload = await res.json().catch(() => null);
-      throw new ApiError(res.status, payload?.error ?? `HTTP ${res.status}: ${res.statusText}`);
+      throw new ApiError(res.status, payload?.error ?? `HTTP ${res.status}: ${res.statusText}`, payload?.code);
     }
 
     if (res.status === 204) {
@@ -54,12 +72,66 @@ class ApiClient {
     return res.json() as Promise<T>;
   }
 
+  /**
+   * Exchanges the refresh-token cookie (sent automatically via
+   * `credentials: "include"`) for a new access token. The server rotates the
+   * cookie on its response, so this never reads or writes it directly.
+   */
+  private refreshToken(): Promise<string> {
+    if (!this.refreshPromise) {
+      this.refreshPromise = fetch(`${this.baseUrl}/auth/refresh`, {
+        method: "POST",
+        credentials: "include",
+      })
+        .then((res) => this.parse<AuthResponse>(res))
+        .then((data) => {
+          setToken(data.token);
+          return data.token;
+        })
+        .finally(() => {
+          this.refreshPromise = null;
+        });
+    }
+    return this.refreshPromise;
+  }
+
+  /**
+   * Runs one attempt, and on a token-expired 401 refreshes and retries once.
+   * `buildInit` is re-invoked on the retry so the Authorization header picks
+   * up the refreshed token rather than replaying the stale one.
+   */
+  private async fetchWithRefresh(
+    path: string,
+    buildInit: (authHeaders: Record<string, string>) => RequestInit,
+    allowRetry = true,
+  ): Promise<Response> {
+    const res = await fetch(`${this.baseUrl}${path}`, { credentials: "include", ...buildInit(this.authHeaders()) });
+
+    if (res.status !== 401 || !allowRetry) {
+      return res;
+    }
+
+    const payload = await res.clone().json().catch(() => null);
+    if (payload?.code !== "token_expired") {
+      return res;
+    }
+
+    try {
+      await this.refreshToken();
+    } catch {
+      clearToken();
+      return res;
+    }
+
+    return this.fetchWithRefresh(path, buildInit, false);
+  }
+
   private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
-    const res = await fetch(`${this.baseUrl}${path}`, {
+    const res = await this.fetchWithRefresh(path, (authHeaders) => ({
       method,
-      headers: { "Content-Type": "application/json", ...this.authHeaders() },
+      headers: { "Content-Type": "application/json", ...authHeaders },
       body: body !== undefined ? JSON.stringify(body) : undefined,
-    });
+    }));
 
     return this.parse<T>(res);
   }
@@ -85,12 +157,12 @@ class ApiClient {
    * the browser generates the multipart boundary itself.
    */
   async postForm<T>(path: string, form: FormData, signal?: AbortSignal): Promise<T> {
-    const res = await fetch(`${this.baseUrl}${path}`, {
+    const res = await this.fetchWithRefresh(path, (authHeaders) => ({
       method: "POST",
-      headers: this.authHeaders(),
+      headers: authHeaders,
       body: form,
       signal,
-    });
+    }));
 
     return this.parse<T>(res);
   }

@@ -8,6 +8,7 @@ import (
 )
 
 var ErrInvalidToken = errors.New("invalid token")
+var ErrExpiredToken = errors.New("expired token")
 
 type TokenIssuer struct {
 	secret []byte
@@ -45,7 +46,16 @@ func (i *TokenIssuer) Verify(tokenString string) (*Claims, error) {
 		}
 		return i.secret, nil
 	})
-	if err != nil || !token.Valid {
+	if err != nil {
+		// Distinguished from other invalid-token cases so the client can tell
+		// "your session expired, retry with a refreshed token" apart from
+		// "this token will never be valid, log in again".
+		if errors.Is(err, jwt.ErrTokenExpired) {
+			return nil, ErrExpiredToken
+		}
+		return nil, ErrInvalidToken
+	}
+	if !token.Valid {
 		return nil, ErrInvalidToken
 	}
 

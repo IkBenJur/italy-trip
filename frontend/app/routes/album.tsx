@@ -3,6 +3,7 @@ import { Link } from "react-router";
 import { usePhotos } from "~/hooks/usePhotos";
 import { useGateEvent } from "~/hooks/useGateEvent";
 import { downloadAll } from "~/lib/download";
+import { CreateEventModal } from "~/components/CreateEventModal";
 
 export function meta() {
   return [{ title: "Italy Trip — Album" }];
@@ -12,6 +13,7 @@ export default function Album() {
   const event = useGateEvent();
   const { data, isPending, error } = usePhotos(event.is_over);
   const [progress, setProgress] = useState<string | null>(null);
+  const [showCreateEvent, setShowCreateEvent] = useState(false);
 
   const photos = data?.photos ?? [];
 
@@ -54,8 +56,17 @@ export default function Album() {
               </button>
             </>
           )}
+          <button
+            type="button"
+            onClick={() => setShowCreateEvent(true)}
+            className="rounded-full border border-white/30 px-4 py-2 text-sm"
+          >
+            New event
+          </button>
         </div>
       </header>
+
+      <CreateEventModal open={showCreateEvent} onClose={() => setShowCreateEvent(false)} />
 
       {isPending && <p className="p-6 text-sm opacity-60">Loading the album…</p>}
 
