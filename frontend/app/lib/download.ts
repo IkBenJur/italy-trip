@@ -26,13 +26,18 @@ export function downloadFilename(takenAt: string): string {
   );
 }
 
-export async function downloadPhoto(photo: { id: string; taken_at: string }): Promise<void> {
-  const blob = await apiClient.getBlob(photoService.originalPath(photo.id));
+/**
+ * Hands a Blob to the browser as a file save, via the classic detached-anchor
+ * + blob: URL technique — the only way to save bytes that were fetched
+ * ourselves (so an Authorization header could be attached) rather than
+ * navigated to directly.
+ */
+function saveBlob(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   try {
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = downloadFilename(photo.taken_at);
+    anchor.download = filename;
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();
@@ -40,6 +45,11 @@ export async function downloadPhoto(photo: { id: string; taken_at: string }): Pr
     // Give the browser a moment to start the save before pulling the URL away.
     setTimeout(() => URL.revokeObjectURL(url), 10_000);
   }
+}
+
+export async function downloadPhoto(photo: { id: string; taken_at: string }): Promise<void> {
+  const blob = await apiClient.getBlob(photoService.originalPath(photo.id));
+  saveBlob(blob, downloadFilename(photo.taken_at));
 }
 
 /**
@@ -60,16 +70,6 @@ export async function downloadAllPhotos(
   onProgress?.("downloading");
   const blob = await res.blob();
 
-  const url = URL.createObjectURL(blob);
-  try {
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = "italy-trip-photos.zip";
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-  } finally {
-    setTimeout(() => URL.revokeObjectURL(url), 10_000);
-  }
+  saveBlob(blob, "italy-trip-photos.zip");
   onProgress?.("done");
 }
