@@ -26,8 +26,8 @@ export const photoService = {
     return apiClient.postForm<UploadResponse>("/events/current/photos", form, input.signal);
   },
 
-  /** The server route that 302s to a presigned download. */
-  originalUrl(photoId: string): string {
-    return apiClient.url(`/photos/${photoId}/original`);
+  /** Behind RequireAuth: streams the original bytes from storage. */
+  originalPath(photoId: string): string {
+    return `/photos/${photoId}/original`;
   },
 };

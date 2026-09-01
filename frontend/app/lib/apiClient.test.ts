@@ -91,4 +91,29 @@ describe("ApiClient token refresh", () => {
     const refreshCalls = fetchMock.mock.calls.filter((call) => call[0] === "http://api.test/auth/refresh");
     expect(refreshCalls).toHaveLength(1);
   });
+
+  it("getBlob retries once with a refreshed token after a token_expired 401", async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(401, { error: "token expired", code: "token_expired" }))
+      .mockResolvedValueOnce(jsonResponse(200, { token: "fresh-token", user: { id: "1", email: "a@b.com" } }))
+      .mockResolvedValueOnce(new Response(new Blob(["jpeg"]), { status: 200 }));
+
+    const blob = await client.getBlob("/photos/p1/original");
+
+    expect(blob).toBeInstanceOf(Blob);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+
+    const retryCall = fetchMock.mock.calls[2]!;
+    const retryHeaders = retryCall[1].headers as Record<string, string>;
+    expect(retryHeaders.Authorization).toBe("Bearer fresh-token");
+  });
+
+  it("getBlob surfaces a non-retryable error as ApiError", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(423, { error: "the event is still running" }));
+
+    await expect(client.getBlob("/photos/p1/original")).rejects.toMatchObject({
+      status: 423,
+      message: "the event is still running",
+    });
+  });
 });

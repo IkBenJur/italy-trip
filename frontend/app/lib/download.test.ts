@@ -1,7 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ApiError } from "~/lib/apiClient";
 import { downloadAll, downloadFilename, downloadPhoto } from "~/lib/download";
 
 const photo = { id: "p1", taken_at: "2026-09-06T14:30:15+02:00" };
+
+function jsonResponse(status: number, body: unknown): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
 
 beforeEach(() => {
   window.localStorage.setItem("auth_token", "a-token");
@@ -48,9 +56,33 @@ describe("downloadPhoto", () => {
   });
 
   it("throws on a failed download rather than saving an error page", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => new Response("nope", { status: 423 })));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonResponse(423, { error: "the event is still running" })),
+    );
 
-    await expect(downloadPhoto(photo)).rejects.toThrow(/HTTP 423/);
+    const error = await downloadPhoto(photo).catch((e) => e);
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect((error as ApiError).status).toBe(423);
+
+    vi.unstubAllGlobals();
+  });
+
+  it("transparently refreshes an expired token instead of failing the download", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(401, { error: "token expired", code: "token_expired" }))
+      .mockResolvedValueOnce(jsonResponse(200, { token: "fresh-token", user: { id: "1", email: "a@b.com" } }))
+      .mockResolvedValueOnce(new Response(new Blob(["jpeg"]), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+
+    await downloadPhoto(photo);
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    const retryHeaders = fetchMock.mock.calls[2]![1].headers as Record<string, string>;
+    expect(retryHeaders.Authorization).toBe("Bearer fresh-token");
 
     vi.unstubAllGlobals();
   });
