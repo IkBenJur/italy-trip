@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/IkBenJur/italy-trip/internal/json"
+	"github.com/IkBenJur/italy-trip/internal/middleware"
 	repo "github.com/IkBenJur/italy-trip/internal/postgres/sqlc"
 	"github.com/IkBenJur/italy-trip/internal/utils"
 	"github.com/gin-gonic/gin"
@@ -74,6 +75,12 @@ type createEventRequest struct {
 // rather than replacing the current one, so past photos stay reachable under
 // their own event.
 func (h *Handler) Create(c *gin.Context) {
+	user, ok := middleware.UserFromContext(c)
+	if !ok {
+		json.WriteErrorFromString(c, http.StatusUnauthorized, "not authenticated")
+		return
+	}
+
 	var req createEventRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		json.WriteErrorFromStringWithErrorObjectLog(c, http.StatusBadRequest, "invalid request body", err)
@@ -101,9 +108,19 @@ func (h *Handler) Create(c *gin.Context) {
 		Name:     DefaultEventName,
 		StartsAt: pgtype.Timestamptz{Time: req.StartsAt, Valid: true},
 		EndsAt:   pgtype.Timestamptz{Time: req.EndsAt, Valid: true},
+		UserID:   user.ID,
 	})
 	if err != nil {
 		json.WriteErrorFromStringWithErrorObjectLog(c, http.StatusInternalServerError, "failed to create event", err)
+		return
+	}
+
+	// Starting an event makes it the creator's active one.
+	if err := h.Queries.SetActiveEvent(c, repo.SetActiveEventParams{
+		ID:            user.ID,
+		ActiveEventID: created.ID,
+	}); err != nil {
+		json.WriteErrorFromStringWithErrorObjectLog(c, http.StatusInternalServerError, "failed to set active event", err)
 		return
 	}
 

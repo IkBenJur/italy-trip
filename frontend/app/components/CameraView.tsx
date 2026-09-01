@@ -231,7 +231,7 @@ export function CameraView({ onConfirm, overlay }: CameraViewProps) {
   if (phase.kind === "error") {
     return (
       <Message title="The camera would not start">
-        <p className="break-words">{phase.message}</p>
+        <p className="wrap-break-word">{phase.message}</p>
         <button
           type="button"
           onClick={() => {
@@ -279,7 +279,7 @@ export function CameraView({ onConfirm, overlay }: CameraViewProps) {
         <div className="pointer-events-none absolute inset-x-0 top-0 p-4">{overlay}</div>
       )}
 
-      <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-6 bg-gradient-to-t from-black/70 to-transparent px-6 pb-10 pt-16">
+      <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-6 bg-linear-to-t from-black/70 to-transparent px-6 pb-10 pt-16">
         {reviewing ? (
           <>
             <button

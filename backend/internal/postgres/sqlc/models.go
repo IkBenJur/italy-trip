@@ -15,6 +15,7 @@ type Event struct {
 	EndsAt    pgtype.Timestamptz `json:"ends_at"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	UserID    pgtype.UUID        `json:"user_id"`
 }
 
 type Photo struct {
@@ -42,9 +43,10 @@ type RefreshToken struct {
 }
 
 type User struct {
-	ID           pgtype.UUID      `json:"id"`
-	Email        string           `json:"email"`
-	PasswordHash string           `json:"password_hash"`
-	CreatedAt    pgtype.Timestamp `json:"created_at"`
-	UpdatedAt    pgtype.Timestamp `json:"updated_at"`
+	ID            pgtype.UUID      `json:"id"`
+	Email         string           `json:"email"`
+	PasswordHash  string           `json:"password_hash"`
+	CreatedAt     pgtype.Timestamp `json:"created_at"`
+	UpdatedAt     pgtype.Timestamp `json:"updated_at"`
+	ActiveEventID pgtype.UUID      `json:"active_event_id"`
 }
