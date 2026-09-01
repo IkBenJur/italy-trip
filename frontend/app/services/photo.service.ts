@@ -30,4 +30,9 @@ export const photoService = {
   originalPath(photoId: string): string {
     return `/photos/${photoId}/original`;
   },
+
+  /** Behind RequireAuth: streams every photo in the current event as one zip. */
+  downloadAllPath(): string {
+    return "/events/current/photos/download";
+  },
 };

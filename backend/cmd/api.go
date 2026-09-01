@@ -56,6 +56,7 @@ func (app *Application) Mount() http.Handler {
 	authorized.POST("events", eventHandler.Create)
 	authorized.POST("events/current/photos", photoHandler.Upload)
 	authorized.GET("events/current/photos", photoHandler.List)
+	authorized.GET("events/current/photos/download", photoHandler.DownloadAll)
 	authorized.GET("photos/:id/original", photoHandler.Original)
 
 	return router

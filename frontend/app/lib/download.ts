@@ -43,16 +43,33 @@ export async function downloadPhoto(photo: { id: string; taken_at: string }): Pr
 }
 
 /**
- * Downloads every photo, one at a time. Firing sixty at once makes Safari drop
- * most of them.
+ * Downloads every photo in the current event as one zip, built server-side —
+ * one authenticated request instead of one per photo (which used to be fired
+ * 300ms apart because Safari drops most of a burst of concurrent downloads).
+ *
+ * There's no real "X / Y" progress to report: the zip has no known
+ * Content-Length while it's streaming, so onProgress only reports which of
+ * the three phases the download is in.
  */
-export async function downloadAll(
-  photos: Array<{ id: string; taken_at: string }>,
-  onProgress?: (done: number, total: number) => void,
+export async function downloadAllPhotos(
+  onProgress?: (state: "starting" | "downloading" | "done") => void,
 ): Promise<void> {
-  for (const [index, photo] of photos.entries()) {
-    await downloadPhoto(photo);
-    onProgress?.(index + 1, photos.length);
-    await new Promise((resolve) => setTimeout(resolve, 300));
+  onProgress?.("starting");
+  const res = await apiClient.getAuthed(photoService.downloadAllPath());
+
+  onProgress?.("downloading");
+  const blob = await res.blob();
+
+  const url = URL.createObjectURL(blob);
+  try {
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "italy-trip-photos.zip";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+  } finally {
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
   }
+  onProgress?.("done");
 }

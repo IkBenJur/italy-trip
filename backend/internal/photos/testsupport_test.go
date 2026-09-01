@@ -73,6 +73,7 @@ func newHarness(t *testing.T, now time.Time) *harness {
 	authorized := router.Group("/", middleware.RequireAuth(issuer, queries))
 	authorized.POST("events/current/photos", handler.Upload)
 	authorized.GET("events/current/photos", handler.List)
+	authorized.GET("events/current/photos/download", handler.DownloadAll)
 	authorized.GET("photos/:id/original", handler.Original)
 
 	return &harness{

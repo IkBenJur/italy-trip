@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "~/lib/apiClient";
-import { downloadAll, downloadFilename, downloadPhoto } from "~/lib/download";
+import { downloadAllPhotos, downloadFilename, downloadPhoto } from "~/lib/download";
 
 const photo = { id: "p1", taken_at: "2026-09-06T14:30:15+02:00" };
 
@@ -88,29 +88,54 @@ describe("downloadPhoto", () => {
   });
 });
 
-describe("downloadAll", () => {
-  it("downloads one at a time and reports progress", async () => {
+describe("downloadAllPhotos", () => {
+  it("makes a single request for the zip and reports all three phases", async () => {
+    const fetchMock = vi.fn(async () => new Response(new Blob(["zip-bytes"]), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+
+    const progress: Array<"starting" | "downloading" | "done"> = [];
+    await downloadAllPhotos((state) => progress.push(state));
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toContain("/events/current/photos/download");
+    expect((init.headers as Record<string, string>).Authorization).toBe("Bearer a-token");
+    expect(click).toHaveBeenCalledTimes(1);
+
+    expect(progress).toEqual(["starting", "downloading", "done"]);
+
+    vi.unstubAllGlobals();
+  });
+
+  it("throws on a failed download rather than saving an error page", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => new Response(new Blob(["jpeg"]), { status: 200 })),
+      vi.fn(async () => jsonResponse(500, { error: "failed to list photos" })),
     );
+
+    const error = await downloadAllPhotos().catch((e) => e);
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect((error as ApiError).status).toBe(500);
+
+    vi.unstubAllGlobals();
+  });
+
+  it("transparently refreshes an expired token instead of failing the download", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(401, { error: "token expired", code: "token_expired" }))
+      .mockResolvedValueOnce(jsonResponse(200, { token: "fresh-token", user: { id: "1", email: "a@b.com" } }))
+      .mockResolvedValueOnce(new Response(new Blob(["zip-bytes"]), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
     vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
 
-    const progress: Array<[number, number]> = [];
-    await downloadAll(
-      [
-        { id: "p1", taken_at: "2026-09-06T10:00:00+02:00" },
-        { id: "p2", taken_at: "2026-09-07T10:00:00+02:00" },
-        { id: "p3", taken_at: "2026-09-08T10:00:00+02:00" },
-      ],
-      (done, total) => progress.push([done, total]),
-    );
+    await downloadAllPhotos();
 
-    expect(progress).toEqual([
-      [1, 3],
-      [2, 3],
-      [3, 3],
-    ]);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    const retryHeaders = fetchMock.mock.calls[2]![1].headers as Record<string, string>;
+    expect(retryHeaders.Authorization).toBe("Bearer fresh-token");
 
     vi.unstubAllGlobals();
   });
