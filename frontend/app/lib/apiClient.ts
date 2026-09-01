@@ -171,18 +171,27 @@ export class ApiClient {
   }
 
   /**
-   * getBlob fetches raw bytes (a photo original, say) instead of JSON, but goes
-   * through the same fetchWithRefresh path as every other request — so a photo
-   * download transparently survives an expired access token instead of just
-   * 401ing, the way a bare `fetch` against the same authenticated endpoint would.
+   * getAuthed runs an authenticated GET through the same fetchWithRefresh path
+   * as every other request — so it transparently survives an expired access
+   * token instead of just 401ing, the way a bare `fetch` against the same
+   * endpoint would — but hands back the raw Response instead of an already-
+   * parsed body. That's for callers that care about the gap between headers
+   * arriving and the full body being read, e.g. to report "starting" versus
+   * "downloading" on a large streamed response.
    */
-  async getBlob(path: string): Promise<Blob> {
+  async getAuthed(path: string): Promise<Response> {
     const res = await this.fetchWithRefresh(path, (authHeaders) => ({
       method: "GET",
       headers: authHeaders,
     }));
 
     await this.throwIfError(res);
+    return res;
+  }
+
+  /** getBlob fetches raw bytes (a photo original, say) instead of JSON. */
+  async getBlob(path: string): Promise<Blob> {
+    const res = await this.getAuthed(path);
     return res.blob();
   }
 

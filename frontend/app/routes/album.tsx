@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router";
 import { usePhotos } from "~/hooks/usePhotos";
 import { useGateEvent } from "~/hooks/useGateEvent";
-import { downloadAll } from "~/lib/download";
+import { downloadAllPhotos } from "~/lib/download";
 import { CreateEventModal } from "~/components/CreateEventModal";
 
 export function meta() {
@@ -38,12 +38,16 @@ export default function Album() {
               <button
                 type="button"
                 onClick={async () => {
-                  setProgress("Starting…");
                   try {
-                    await downloadAll(photos, (done, total) =>
-                      setProgress(`${done} / ${total}`),
+                    await downloadAllPhotos((state) =>
+                      setProgress(
+                        state === "starting"
+                          ? "Preparing…"
+                          : state === "downloading"
+                            ? "Downloading…"
+                            : "Done",
+                      ),
                     );
-                    setProgress("Done");
                   } catch (downloadError) {
                     setProgress(
                       downloadError instanceof Error ? downloadError.message : "Failed",
