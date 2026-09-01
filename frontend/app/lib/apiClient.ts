@@ -59,11 +59,14 @@ export class ApiClient {
     return token ? { Authorization: `Bearer ${token}` } : {};
   }
 
+  private async throwIfError(res: Response): Promise<void> {
+    if (res.ok) return;
+    const payload = await res.json().catch(() => null);
+    throw new ApiError(res.status, payload?.error ?? `HTTP ${res.status}: ${res.statusText}`, payload?.code);
+  }
+
   private async parse<T>(res: Response): Promise<T> {
-    if (!res.ok) {
-      const payload = await res.json().catch(() => null);
-      throw new ApiError(res.status, payload?.error ?? `HTTP ${res.status}: ${res.statusText}`, payload?.code);
-    }
+    await this.throwIfError(res);
 
     if (res.status === 204) {
       return undefined as T;
@@ -165,6 +168,22 @@ export class ApiClient {
     }));
 
     return this.parse<T>(res);
+  }
+
+  /**
+   * getBlob fetches raw bytes (a photo original, say) instead of JSON, but goes
+   * through the same fetchWithRefresh path as every other request — so a photo
+   * download transparently survives an expired access token instead of just
+   * 401ing, the way a bare `fetch` against the same authenticated endpoint would.
+   */
+  async getBlob(path: string): Promise<Blob> {
+    const res = await this.fetchWithRefresh(path, (authHeaders) => ({
+      method: "GET",
+      headers: authHeaders,
+    }));
+
+    await this.throwIfError(res);
+    return res.blob();
   }
 
   /** The absolute URL for a path, for links the browser follows itself. */

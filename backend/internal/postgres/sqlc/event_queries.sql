@@ -1,6 +1,6 @@
 -- name: CreateEvent :one
-INSERT INTO events (name, starts_at, ends_at)
-VALUES ($1, $2, $3)
+INSERT INTO events (name, starts_at, ends_at, user_id)
+VALUES ($1, $2, $3, $4)
 RETURNING *;
 
 -- name: GetCurrentEvent :one

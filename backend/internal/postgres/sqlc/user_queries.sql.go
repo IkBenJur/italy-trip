@@ -14,7 +14,7 @@ import (
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (email, password_hash)
 VALUES ($1, $2)
-RETURNING id, email, password_hash, created_at, updated_at
+RETURNING id, email, password_hash, created_at, updated_at, active_event_id
 `
 
 type CreateUserParams struct {
@@ -31,12 +31,13 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.PasswordHash,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ActiveEventID,
 	)
 	return i, err
 }
 
 const findUserByEmail = `-- name: FindUserByEmail :one
-SELECT id, email, password_hash, created_at, updated_at FROM users
+SELECT id, email, password_hash, created_at, updated_at, active_event_id FROM users
 WHERE email = $1
 `
 
@@ -49,12 +50,13 @@ func (q *Queries) FindUserByEmail(ctx context.Context, email string) (User, erro
 		&i.PasswordHash,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ActiveEventID,
 	)
 	return i, err
 }
 
 const findUserById = `-- name: FindUserById :one
-SELECT id, email, password_hash, created_at, updated_at FROM users
+SELECT id, email, password_hash, created_at, updated_at, active_event_id FROM users
 WHERE id = $1
 `
 
@@ -67,12 +69,13 @@ func (q *Queries) FindUserById(ctx context.Context, id pgtype.UUID) (User, error
 		&i.PasswordHash,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ActiveEventID,
 	)
 	return i, err
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, email, password_hash, created_at, updated_at FROM users
+SELECT id, email, password_hash, created_at, updated_at, active_event_id FROM users
 ORDER BY created_at DESC
 `
 
@@ -91,6 +94,7 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 			&i.PasswordHash,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ActiveEventID,
 		); err != nil {
 			return nil, err
 		}
@@ -100,4 +104,20 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const setActiveEvent = `-- name: SetActiveEvent :exec
+UPDATE users
+SET active_event_id = $2, updated_at = now()
+WHERE id = $1
+`
+
+type SetActiveEventParams struct {
+	ID            pgtype.UUID `json:"id"`
+	ActiveEventID pgtype.UUID `json:"active_event_id"`
+}
+
+func (q *Queries) SetActiveEvent(ctx context.Context, arg SetActiveEventParams) error {
+	_, err := q.db.Exec(ctx, setActiveEvent, arg.ID, arg.ActiveEventID)
+	return err
 }
