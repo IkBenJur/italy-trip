@@ -2,15 +2,17 @@
  * Saving an original.
  *
  * /photos/:id/original sits behind RequireAuth, so a plain <a href> would send
- * no Authorization header and get a 401. The bytes are fetched with the token
- * instead, and then handed to the browser as a download.
+ * no Authorization header and get a 401. The bytes are fetched through
+ * apiClient instead, and then handed to the browser as a download — that also
+ * means an access token that expired between opening the album and clicking
+ * download gets transparently refreshed and retried, same as any other request.
  *
  * That Authorization header makes this a CORS request, which is why the API
  * serves the bytes itself rather than redirecting to the bucket: a CORS fetch
  * that follows a cross-origin redirect sends Origin: null and lands on an
  * origin with no Access-Control-Allow-Origin, and the browser drops it.
  */
-import { getToken } from "~/lib/auth";
+import { apiClient } from "~/lib/apiClient";
 import { photoService } from "~/services/photo.service";
 
 export function downloadFilename(takenAt: string): string {
@@ -25,16 +27,7 @@ export function downloadFilename(takenAt: string): string {
 }
 
 export async function downloadPhoto(photo: { id: string; taken_at: string }): Promise<void> {
-  const token = getToken();
-  const res = await fetch(photoService.originalUrl(photo.id), {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  });
-
-  if (!res.ok) {
-    throw new Error(`Could not download the photo (HTTP ${res.status})`);
-  }
-
-  const blob = await res.blob();
+  const blob = await apiClient.getBlob(photoService.originalPath(photo.id));
   const url = URL.createObjectURL(blob);
   try {
     const anchor = document.createElement("a");
